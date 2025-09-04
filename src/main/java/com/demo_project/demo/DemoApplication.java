@@ -22,11 +22,10 @@ public class DemoApplication implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        // Step 1: Generate webhook
         GenerateWebhookRequest request = new GenerateWebhookRequest(
-                "John Doe",      // 🔹 Replace with your name
-                "REG12347",      // 🔹 Replace with your regNo
-                "john@example.com" // 🔹 Replace with your email
+                "John Doe",      
+                "REG12347",     
+                "john@example.com" 
         );
 
         WebhookResponse response = webClient.post()
@@ -49,11 +48,11 @@ public class DemoApplication implements CommandLineRunner {
         System.out.println("✅ Webhook URL: " + webhookUrl);
         System.out.println("✅ AccessToken: " + jwtToken);
 
-        // Step 2: Decide Question (odd/even last 2 digits of regNo)
+        
         int lastTwoDigits = Integer.parseInt(regNo.substring(regNo.length() - 2));
         String finalQuery = (lastTwoDigits % 2 == 1) ? solveQuestion1() : solveQuestion2();
 
-        // Step 3: Submit solution
+       
         SolutionRequest solution = new SolutionRequest(finalQuery);
         String result = webClient.post()
                 .uri("/hiring/testWebhook/JAVA")
@@ -67,7 +66,7 @@ public class DemoApplication implements CommandLineRunner {
         System.out.println("✅ Response from webhook: " + result);
     }
 
-    // ✅ SQL for Question 1
+
     private String solveQuestion1() {
         return "SELECT p.AMOUNT AS SALARY, " +
                 "CONCAT(e.FIRST_NAME, ' ', e.LAST_NAME) AS NAME, " +
@@ -80,7 +79,7 @@ public class DemoApplication implements CommandLineRunner {
                 "ORDER BY p.AMOUNT DESC LIMIT 1;";
     }
 
-    // ✅ SQL for Question 2
+
     private String solveQuestion2() {
         return "SELECT e1.EMP_ID, " +
                 "e1.FIRST_NAME, " +
