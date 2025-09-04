@@ -1,24 +1,20 @@
 package com.demo_project.demo;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.http.MediaType;
 import reactor.core.publisher.Mono;
-
-import java.util.Scanner;
 
 @SpringBootApplication
 public class DemoApplication implements CommandLineRunner {
 
-    @Autowired
-    private WebClient webClient;
+    private final WebClient webClient;
 
-    @Value("${spring.profiles.active:default}")
-    private String activeProfile;
+    public DemoApplication(WebClient.Builder builder) {
+        this.webClient = builder.baseUrl("https://bfhldevapigw.healthrx.co.in").build();
+    }
 
     public static void main(String[] args) {
         SpringApplication.run(DemoApplication.class, args);
@@ -26,23 +22,12 @@ public class DemoApplication implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        if ("test".equals(activeProfile)) {
-            System.out.println("Skipping startup logic in test profile...");
-            return;
-        }
-
-        Scanner sc = new Scanner(System.in);
-
-        System.out.print("Enter Name: ");
-        String name = sc.nextLine();
-
-        System.out.print("Enter RegNo: ");
-        String regNo = sc.nextLine();
-
-        System.out.print("Enter Email: ");
-        String email = sc.nextLine();
-
-        GenerateWebhookRequest request = new GenerateWebhookRequest(name, regNo, email);
+        // Step 1: Generate webhook
+        GenerateWebhookRequest request = new GenerateWebhookRequest(
+                "John Doe",      // 🔹 Replace with your name
+                "REG12347",      // 🔹 Replace with your regNo
+                "john@example.com" // 🔹 Replace with your email
+        );
 
         WebhookResponse response = webClient.post()
                 .uri("/hiring/generateWebhook/JAVA")
@@ -52,24 +37,23 @@ public class DemoApplication implements CommandLineRunner {
                 .bodyToMono(WebhookResponse.class)
                 .block();
 
-        assert response != null;
-        String webhookUrl = response.getWebhookUrl();
-        String jwtToken = response.getAccessToken();
-
-        System.out.println("\n✅ Webhook URL: " + webhookUrl);
-        System.out.println("✅ AccessToken: " + jwtToken);
-
-        int lastTwoDigits = Integer.parseInt(regNo.substring(regNo.length() - 2));
-        if (lastTwoDigits % 2 == 1) {
-            System.out.println("👉 Your question (ref Question 1): https://drive.google.com/file/d/1IeSI6l6KoS_QAFfRihIT9tEDICtoz-G_/view?usp=sharing");
-        } else {
-            System.out.println("👉 Your question (ref Question 2): https://drive.google.com/file/d/143MR5cLFrlNEuHzzWJ5RHnEW_uijuM9X/view?usp=sharing");
+        if (response == null) {
+            System.out.println("❌ Failed to generate webhook");
+            return;
         }
 
+        String webhookUrl = response.getWebhookUrl();
+        String jwtToken = response.getAccessToken();
+        String regNo = request.getRegNo();
 
-        System.out.println("\nEnter your final SQL query (paste in one line):");
-        String finalQuery = sc.nextLine();
+        System.out.println("✅ Webhook URL: " + webhookUrl);
+        System.out.println("✅ AccessToken: " + jwtToken);
 
+        // Step 2: Decide Question (odd/even last 2 digits of regNo)
+        int lastTwoDigits = Integer.parseInt(regNo.substring(regNo.length() - 2));
+        String finalQuery = (lastTwoDigits % 2 == 1) ? solveQuestion1() : solveQuestion2();
+
+        // Step 3: Submit solution
         SolutionRequest solution = new SolutionRequest(finalQuery);
         String result = webClient.post()
                 .uri("/hiring/testWebhook/JAVA")
@@ -79,6 +63,36 @@ public class DemoApplication implements CommandLineRunner {
                 .retrieve()
                 .bodyToMono(String.class)
                 .block();
-        System.out.println("\n📩 Response from webhook: " + result);
+
+        System.out.println("✅ Response from webhook: " + result);
+    }
+
+    // ✅ SQL for Question 1
+    private String solveQuestion1() {
+        return "SELECT p.AMOUNT AS SALARY, " +
+                "CONCAT(e.FIRST_NAME, ' ', e.LAST_NAME) AS NAME, " +
+                "TIMESTAMPDIFF(YEAR, e.DOB, CURDATE()) AS AGE, " +
+                "d.DEPARTMENT_NAME " +
+                "FROM PAYMENTS p " +
+                "JOIN EMPLOYEE e ON p.EMP_ID = e.EMP_ID " +
+                "JOIN DEPARTMENT d ON e.DEPARTMENT = d.DEPARTMENT_ID " +
+                "WHERE DAY(p.PAYMENT_TIME) <> 1 " +
+                "ORDER BY p.AMOUNT DESC LIMIT 1;";
+    }
+
+    // ✅ SQL for Question 2
+    private String solveQuestion2() {
+        return "SELECT e1.EMP_ID, " +
+                "e1.FIRST_NAME, " +
+                "e1.LAST_NAME, " +
+                "d.DEPARTMENT_NAME, " +
+                "COUNT(e2.EMP_ID) AS YOUNGER_EMPLOYEES_COUNT " +
+                "FROM EMPLOYEE e1 " +
+                "JOIN DEPARTMENT d ON e1.DEPARTMENT = d.DEPARTMENT_ID " +
+                "LEFT JOIN EMPLOYEE e2 " +
+                "ON e1.DEPARTMENT = e2.DEPARTMENT " +
+                "AND e2.DOB > e1.DOB " +
+                "GROUP BY e1.EMP_ID, e1.FIRST_NAME, e1.LAST_NAME, d.DEPARTMENT_NAME " +
+                "ORDER BY e1.EMP_ID DESC;";
     }
 }
